@@ -217,13 +217,19 @@ function PracticeApp({ onEnterUPCAT }) {
             <span className="hidden sm:block font-bold text-xl text-white italic tracking-tighter uppercase">Alamat</span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            {/* UPCAT Mock */}
             <button
               onClick={onEnterUPCAT}
-              className="px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase transition-all bg-violet-500/20 border-violet-500/50 text-violet-400 hover:bg-violet-500/30"
+              title="UPCAT Mock Exam"
+              className="w-9 h-9 rounded-xl flex items-center justify-center border transition-all bg-violet-500/10 border-violet-500/30 text-violet-400 hover:bg-violet-500/20"
             >
-              UPCAT Mock
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
             </button>
+
+            {/* Hard Mode toggle */}
             <button
               onClick={async () => {
                 const next = !isHardMode;
@@ -234,21 +240,29 @@ function PracticeApp({ onEnterUPCAT }) {
                 await seedAlamatDatabase(subjects[Math.floor(Math.random() * subjects.length)], 5, next);
                 loadNextQuestion(sessionCount);
               }}
-              className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase transition-all ${isHardMode ? "bg-rose-500/20 border-rose-500 text-rose-400" : "bg-white/5 border-white/10 text-slate-500"}`}
+              title={isHardMode ? "Hard Mode — click to switch to Standard" : "Standard — click to switch to Hard Mode"}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all ${isHardMode ? "bg-rose-500/20 border-rose-500/60 text-rose-400" : "bg-white/5 border-white/10 text-slate-500 hover:border-white/20"}`}
             >
-              {isHardMode ? "Hard Mode" : "Standard"}
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
             </button>
+
+            {/* Vault */}
             <button
               onClick={toggleMastery}
-              className="p-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-bold uppercase text-cyan-400 tracking-widest hover:bg-white/10 flex items-center gap-2"
+              title="Mastery Vault"
+              className="w-9 h-9 rounded-xl flex items-center justify-center border transition-all bg-white/5 border-white/10 text-cyan-400 hover:bg-white/10"
             >
-              Vault
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
             </button>
-            <div className="text-right border-l border-white/10 pl-4">
-              <p className="text-[9px] text-slate-500 font-bold uppercase mb-1 leading-none">Timer</p>
-              <p
-                className={`text-lg font-mono font-bold leading-none ${timeLeft < 15 ? "text-rose-500 animate-pulse drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]" : "text-white"}`}
-              >
+
+            {/* Timer */}
+            <div className="border-l border-white/10 pl-3 ml-1 text-right">
+              <p className="text-[9px] text-slate-500 font-bold uppercase leading-none mb-0.5">Timer</p>
+              <p className={`text-lg font-mono font-bold leading-none ${timeLeft < 15 ? "text-rose-500 animate-pulse drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]" : "text-white"}`}>
                 {Math.floor(timeLeft / 60)}:{timeLeft % 60 < 10 ? `0${timeLeft % 60}` : timeLeft % 60}
               </p>
             </div>
