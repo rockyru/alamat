@@ -3,6 +3,9 @@ import { updateProgress } from "./adaptiveEngine";
 import { seedAlamatDatabase } from "./services/generator";
 import { db } from "./db";
 import UPCATMock from "./components/UPCATMock";
+import ExamSelector, { EXAMS } from "./components/ExamSelector";
+import ReviewMode from "./components/ReviewMode";
+import DrillMode from "./components/DrillMode";
 
 // Map colors to subjects for better visual hierarchy
 const SUBJECT_THEMES = {
@@ -18,7 +21,7 @@ const SUBJECT_THEMES = {
   "Civil Service - Analytical": "border-pink-500/40 text-pink-400 bg-pink-500/10",
 };
 
-function PracticeApp({ onEnterUPCAT }) {
+function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver }) {
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [selected, setSelected] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -32,6 +35,7 @@ function PracticeApp({ onEnterUPCAT }) {
   const [isSeeding, setIsSeeding] = useState(false);
   const [isHardMode, setIsHardMode] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [sessionHistory, setSessionHistory] = useState([]);
 
   const timerRef = useRef(null);
   const SESSION_LIMIT = 10;
@@ -63,7 +67,8 @@ function PracticeApp({ onEnterUPCAT }) {
         startAtCount = parsed.sessionCount || 0;
       }
       const count = await db.questions.count();
-      if (count === 0) await seedAlamatDatabase("Mathematics", 2, isHardMode);
+      const seedSubject = examSubjects?.[0] ?? "Mathematics";
+      if (count === 0) await seedAlamatDatabase(seedSubject, 2, isHardMode);
       loadNextQuestion(startAtCount);
     }
     boot();
@@ -83,17 +88,19 @@ function PracticeApp({ onEnterUPCAT }) {
       setIsSessionOver(true);
       setIsLoading(false);
       setIsTransitioning(false);
+      onSessionOver?.(sessionHistory);
       return;
     }
 
     setIsTransitioning(true);
     try {
       const allQuestions = await db.questions.toArray();
-      const unseen = allQuestions.filter((q) => q.seen !== 1);
+      const scoped = examSubjects ? allQuestions.filter((q) => examSubjects.includes(q.subject)) : allQuestions;
+      const unseen = scoped.filter((q) => q.seen !== 1);
 
       if (unseen.length < 5 && !isSeeding) {
         setIsSeeding(true);
-        const subjects = Object.keys(SUBJECT_TIMERS);
+        const subjects = examSubjects ?? Object.keys(SUBJECT_TIMERS);
         seedAlamatDatabase(subjects[Math.floor(Math.random() * subjects.length)], 2, isHardMode).finally(() =>
           setTimeout(() => setIsSeeding(false), 5000),
         );
@@ -129,6 +136,11 @@ function PracticeApp({ onEnterUPCAT }) {
     const isCorrect = index === currentQuestion.correctIndex;
     setScore((prev) => ({ correct: isCorrect ? prev.correct + 1 : prev.correct, total: prev.total + 1 }));
     setSessionCount((prev) => prev + 1);
+    setSessionHistory((prev) => [...prev, {
+      ...currentQuestion,
+      selectedIndex: index,
+      isCorrect,
+    }]);
     await updateProgress(currentQuestion.topic, isCorrect, currentQuestion.subject);
   };
 
@@ -467,18 +479,114 @@ function PracticeApp({ onEnterUPCAT }) {
 }
 
 export default function App() {
-  const [mode, setMode] = useState("practice");
+  const [mode, setMode] = useState("select"); // "select" | "practice" | "upcat" | "review" | "drill"
+  const [examKey, setExamKey] = useState("upcat");
+  const [reviewHistory, setReviewHistory] = useState([]);
+  const [weakSubjects, setWeakSubjects] = useState([]);
+
+  async function getWeakSubjectsFromDB() {
+    const progress = await db.progress.toArray();
+    if (progress.length === 0) return null;
+    const bySubject = {};
+    progress.forEach((p) => {
+      if (!bySubject[p.subject]) bySubject[p.subject] = { correct: 0, total: 0 };
+      bySubject[p.subject].correct += p.correctAttempts;
+      bySubject[p.subject].total += p.totalAttempts;
+    });
+    const sorted = Object.entries(bySubject)
+      .filter(([, v]) => v.total >= 2)
+      .sort(([, a], [, b]) => (a.correct / a.total) - (b.correct / b.total));
+    // Return bottom 3 subjects
+    return sorted.slice(0, 3).map(([subject]) => subject);
+  }
 
   if (mode === "upcat") {
     return (
       <UPCATMock
         onExit={async () => {
           await db.questions.clear();
-          setMode("practice");
+          setMode("select");
         }}
       />
     );
   }
 
-  return <PracticeApp onEnterUPCAT={() => setMode("upcat")} />;
+  if (mode === "review") {
+    return (
+      <ReviewMode
+        history={reviewHistory}
+        onDone={async () => {
+          await db.questions.clear();
+          setMode("select");
+        }}
+      />
+    );
+  }
+
+  if (mode === "drill") {
+    return (
+      <DrillMode
+        weakSubjects={weakSubjects}
+        onExit={() => setMode("practice")}
+      />
+    );
+  }
+
+  if (mode === "select") {
+    return (
+      <div className="min-h-screen bg-[#05070a] text-slate-200 font-sans flex flex-col items-center justify-center px-6">
+        <div className="max-w-xl w-full space-y-10 animate-in fade-in zoom-in-95">
+          <div>
+            <div className="w-10 h-10 bg-cyan-500 rounded-xl flex items-center justify-center text-black font-black shadow-[0_0_20px_rgba(6,182,212,0.4)] mb-6">A</div>
+            <h1 className="text-5xl font-black text-white uppercase italic tracking-tighter leading-none">Alamat</h1>
+            <p className="text-slate-500 text-sm mt-2">Philippine Exam Reviewer</p>
+          </div>
+
+          <ExamSelector selected={examKey} onSelect={setExamKey} />
+
+          <div className="space-y-3">
+            <button
+              onClick={() => setMode("practice")}
+              className="w-full py-5 bg-cyan-500 text-black font-black rounded-2xl text-lg uppercase hover:bg-white transition-all"
+            >
+              Start Practice
+            </button>
+            <button
+              onClick={() => setMode("upcat")}
+              className="w-full py-4 bg-violet-500/10 border border-violet-500/30 text-violet-400 font-black rounded-2xl text-sm uppercase hover:bg-violet-500/20 transition-all"
+            >
+              UPCAT Full Mock Exam
+            </button>
+            <button
+              onClick={async () => {
+                const weak = await getWeakSubjectsFromDB();
+                if (!weak || weak.length === 0) {
+                  alert("Complete a few practice cycles first so Alamat can identify your weak topics.");
+                  return;
+                }
+                setWeakSubjects(weak);
+                setMode("drill");
+              }}
+              className="w-full py-4 bg-amber-500/10 border border-amber-500/30 text-amber-400 font-black rounded-2xl text-sm uppercase hover:bg-amber-500/20 transition-all"
+            >
+              Weak Topic Drill
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // mode === "practice"
+  const exam = EXAMS.find((e) => e.key === examKey);
+  return (
+    <PracticeApp
+      examSubjects={exam?.subjects}
+      onEnterUPCAT={() => setMode("upcat")}
+      onSessionOver={(history) => {
+        setReviewHistory(history);
+        setMode("review");
+      }}
+    />
+  );
 }
