@@ -302,6 +302,28 @@ function PracticeApp({ onEnterUPCAT }) {
           currentQuestion && (
             <div className="flex flex-col lg:flex-row gap-12 lg:gap-20 items-start">
               <div className="flex-1 space-y-12 w-full">
+                {/* NAV ICON LEGEND */}
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                    <span className="w-5 h-5 rounded-md bg-violet-500/10 border border-violet-500/30 flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    </span>
+                    UPCAT Mock
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                    <span className={`w-5 h-5 rounded-md flex items-center justify-center ${isHardMode ? "bg-rose-500/20 border border-rose-500/60" : "bg-white/5 border border-white/10"}`}>
+                      <svg xmlns="http://www.w3.org/2000/svg" className={`w-3 h-3 ${isHardMode ? "text-rose-400" : "text-slate-500"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    </span>
+                    {isHardMode ? "Hard Mode" : "Standard"}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                    <span className="w-5 h-5 rounded-md bg-white/5 border border-white/10 flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </span>
+                    Vault
+                  </div>
+                </div>
+
                 {/* REFACTORED VISUAL BOX */}
                 {currentQuestion.visualPrompt && (
                   <div className="bg-[#0a0c10] border-2 border-cyan-500/30 rounded-3xl overflow-hidden shadow-2xl">
