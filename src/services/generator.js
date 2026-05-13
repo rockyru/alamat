@@ -4,7 +4,7 @@ export async function seedAlamatDatabase(subject, count, isHardMode = false) {
   const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
 
   const difficultyContext = isHardMode
-    ? "LEVEL: DIFFICULT. Focus on multi-step reasoning and complex analysis."
+    ? `LEVEL: DIFFICULT. Generate genuinely hard questions that require multi-step reasoning, deep analysis, and synthesis of concepts. Questions should NOT be answerable by recognition alone — they must require working through the problem. Use complex scenarios, tricky edge cases, and plausible-but-wrong distractors that require careful reasoning to eliminate. Avoid straightforward definitional or recall questions.`
     : "LEVEL: STANDARD. Focus on core concepts and speed-accuracy.";
 
   const prompt = `Generate ${count} UNIQUE exam questions for ${subject}.

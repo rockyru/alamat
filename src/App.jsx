@@ -200,7 +200,15 @@ export default function App() {
 
           <div className="flex items-center gap-4">
             <button
-              onClick={() => setIsHardMode(!isHardMode)}
+              onClick={async () => {
+                const next = !isHardMode;
+                setIsHardMode(next);
+                setIsLoading(true);
+                await db.questions.clear();
+                const subjects = Object.keys(SUBJECT_TIMERS);
+                await seedAlamatDatabase(subjects[Math.floor(Math.random() * subjects.length)], 5, next);
+                loadNextQuestion(sessionCount);
+              }}
               className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase transition-all ${isHardMode ? "bg-rose-500/20 border-rose-500 text-rose-400" : "bg-white/5 border-white/10 text-slate-500"}`}
             >
               {isHardMode ? "Hard Mode" : "Standard"}
@@ -241,8 +249,9 @@ export default function App() {
               </div>
             </div>
             <button
-              onClick={() => {
+              onClick={async () => {
                 localStorage.removeItem("alamat_session_data");
+                await db.questions.clear();
                 window.location.reload();
               }}
               className="w-full bg-cyan-500 text-black py-8 rounded-[40px] font-black text-2xl uppercase hover:bg-white transition-all shadow-2xl"
