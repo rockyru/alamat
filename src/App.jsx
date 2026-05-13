@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { updateProgress } from "./adaptiveEngine";
+import { updateProgress, scheduleReview, pickNextQuestion, getSubjectAccuracy, getDiagnosisText } from "./adaptiveEngine";
 import { seedAlamatDatabase } from "./services/generator";
 import { db } from "./db";
 import UPCATMock from "./components/UPCATMock";
-import ExamSelector, { EXAMS } from "./components/ExamSelector";
+import { EXAMS } from "./components/ExamSelector";
+import LandingPage from "./components/LandingPage";
+import StudyPlan from "./components/StudyPlan";
 import ReviewMode from "./components/ReviewMode";
 import DrillMode from "./components/DrillMode";
 
@@ -21,7 +23,7 @@ const SUBJECT_THEMES = {
   "Civil Service - Analytical": "border-pink-500/40 text-pink-400 bg-pink-500/10",
 };
 
-function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver }) {
+function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver, onBack }) {
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [selected, setSelected] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -94,11 +96,14 @@ function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver }) {
 
     setIsTransitioning(true);
     try {
+      // Adaptive weighted pick (includes SRS due questions)
+      const nextQ = await pickNextQuestion(examSubjects, effectiveCount);
+
+      // Check if pool is running low and seed more
       const allQuestions = await db.questions.toArray();
       const scoped = examSubjects ? allQuestions.filter((q) => examSubjects.includes(q.subject)) : allQuestions;
-      const unseen = scoped.filter((q) => q.seen !== 1);
-
-      if (unseen.length < 5 && !isSeeding) {
+      const available = scoped.filter((q) => q.seen !== 1);
+      if (available.length < 5 && !isSeeding) {
         setIsSeeding(true);
         const subjects = examSubjects ?? Object.keys(SUBJECT_TIMERS);
         seedAlamatDatabase(subjects[Math.floor(Math.random() * subjects.length)], 2, isHardMode).finally(() =>
@@ -106,10 +111,8 @@ function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver }) {
         );
       }
 
-      if (unseen.length > 0) {
-        const nextQ = unseen[Math.floor(Math.random() * unseen.length)];
+      if (nextQ) {
         await db.questions.update(nextQ.id, { seen: 1 });
-
         setTimeout(() => {
           setCurrentQuestion(nextQ);
           setSelected(null);
@@ -134,36 +137,37 @@ function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver }) {
     setSelected(index);
     setIsSubmitted(true);
     const isCorrect = index === currentQuestion.correctIndex;
+    const newCount = sessionCount + 1;
     setScore((prev) => ({ correct: isCorrect ? prev.correct + 1 : prev.correct, total: prev.total + 1 }));
-    setSessionCount((prev) => prev + 1);
-    setSessionHistory((prev) => [...prev, {
-      ...currentQuestion,
-      selectedIndex: index,
-      isCorrect,
-    }]);
+    setSessionCount(newCount);
+    setSessionHistory((prev) => [...prev, { ...currentQuestion, selectedIndex: index, isCorrect }]);
     await updateProgress(currentQuestion.topic, isCorrect, currentQuestion.subject);
+    // Schedule wrong answers for spaced repetition
+    if (!isCorrect) {
+      const step = currentQuestion.intervalStep ?? 0;
+      await scheduleReview(currentQuestion.id, newCount, step);
+    }
   };
 
   const toggleMastery = async () => {
     if (!showMastery) {
-      const progress = await db.progress.toArray();
-      const stats = {
-        Mathematics: { correct: 0, total: 0, color: "text-blue-400" },
-        Science: { correct: 0, total: 0, color: "text-emerald-400" },
-        "Language Proficiency": { correct: 0, total: 0, color: "text-purple-400" },
-        "Reading Comprehension": { correct: 0, total: 0, color: "text-amber-400" },
-        Filipino: { correct: 0, total: 0, color: "text-rose-400" },
-        "Abstract Reasoning": { correct: 0, total: 0, color: "text-violet-400" },
-        "General Knowledge": { correct: 0, total: 0, color: "text-cyan-400" },
-        "Civil Service - Verbal": { correct: 0, total: 0, color: "text-orange-400" },
-        "Civil Service - Numerical": { correct: 0, total: 0, color: "text-teal-400" },
-        "Civil Service - Analytical": { correct: 0, total: 0, color: "text-pink-400" },
+      const accuracy = await getSubjectAccuracy();
+      const colorMap = {
+        Mathematics: "text-blue-400", Science: "text-emerald-400",
+        "Language Proficiency": "text-purple-400", "Reading Comprehension": "text-amber-400",
+        Filipino: "text-rose-400", "Abstract Reasoning": "text-violet-400",
+        "General Knowledge": "text-cyan-400", "Civil Service - Verbal": "text-orange-400",
+        "Civil Service - Numerical": "text-teal-400", "Civil Service - Analytical": "text-pink-400",
       };
-      progress.forEach((p) => {
-        if (stats[p.subject]) {
-          stats[p.subject].correct += p.correctAttempts;
-          stats[p.subject].total += p.totalAttempts;
-        }
+      const stats = {};
+      accuracy.forEach(({ subject, accuracy: acc, total }) => {
+        stats[subject] = {
+          correct: Math.round(acc * total),
+          total,
+          color: colorMap[subject] || "text-slate-400",
+          accuracy: acc,
+          diagnosis: getDiagnosisText(subject, acc, total),
+        };
       });
       setMasteryStats(stats);
     }
@@ -223,10 +227,15 @@ function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver }) {
       <nav className="border-b border-white/5 px-6 py-4 bg-[#05070a]/80 backdrop-blur-md sticky top-1 z-50">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center text-black font-black shadow-[0_0_15px_rgba(6,182,212,0.4)]">
-              A
-            </div>
-            <span className="hidden sm:block font-bold text-xl text-white italic tracking-tighter uppercase">Alamat</span>
+            <button
+              onClick={onBack}
+              className="w-8 h-8 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-500/20 hover:border-rose-500/50 hover:text-rose-400 transition-all"
+              title="Exit to Home"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -445,24 +454,33 @@ function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver }) {
                 ✕
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
               {Object.entries(masteryStats).map(([name, stat]) => {
                 const percentage = stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0;
+                const isWeak = percentage < 60;
                 return (
                   <div
                     key={name}
-                    className="bg-white/[0.03] border border-white/5 p-8 rounded-[32px]"
+                    className={`border p-6 rounded-[28px] space-y-3 ${isWeak ? "bg-rose-500/5 border-rose-500/20" : "bg-white/[0.03] border-white/5"}`}
                   >
-                    <div className="flex justify-between mb-4 items-end">
-                      <span className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">{name}</span>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-slate-400 font-bold uppercase text-[10px] tracking-widest block">{name}</span>
+                        <span className="text-[9px] text-slate-600 font-bold">{stat.total} attempts</span>
+                      </div>
                       <span className={`font-black text-2xl ${stat.color}`}>{percentage}%</span>
                     </div>
-                    <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden mb-4">
+                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                       <div
-                        className={`h-full ${stat.color.replace("text", "bg")} shadow-[0_0_10px_currentColor]`}
-                        style={{ width: `${percentage}%` }}
+                        className={`h-full ${stat.color.replace("text", "bg")} rounded-full`}
+                        style={{ width: `${percentage}%`, transition: "width 0.6s ease" }}
                       />
                     </div>
+                    {stat.diagnosis && (
+                      <p className={`text-[11px] leading-relaxed ${isWeak ? "text-rose-300/70" : "text-slate-500"}`}>
+                        {stat.diagnosis}
+                      </p>
+                    )}
                   </div>
                 );
               })}
@@ -533,48 +551,19 @@ export default function App() {
   }
 
   if (mode === "select") {
-    return (
-      <div className="min-h-screen bg-[#05070a] text-slate-200 font-sans flex flex-col items-center justify-center px-6">
-        <div className="max-w-xl w-full space-y-10 animate-in fade-in zoom-in-95">
-          <div>
-            <div className="w-10 h-10 bg-cyan-500 rounded-xl flex items-center justify-center text-black font-black shadow-[0_0_20px_rgba(6,182,212,0.4)] mb-6">A</div>
-            <h1 className="text-5xl font-black text-white uppercase italic tracking-tighter leading-none">Alamat</h1>
-            <p className="text-slate-500 text-sm mt-2">Philippine Exam Reviewer</p>
-          </div>
+    return <LandingPage examKey={examKey} setExamKey={setExamKey} onPractice={() => setMode("practice")} onUPCAT={() => setMode("upcat")} onDrill={async () => {
+      const weak = await getWeakSubjectsFromDB();
+      if (!weak || weak.length === 0) {
+        alert("Complete a few practice cycles first so ALAMAT can identify your weak topics.");
+        return;
+      }
+      setWeakSubjects(weak);
+      setMode("drill");
+    }} onStudyPlan={() => setMode("studyplan")} />;
+  }
 
-          <ExamSelector selected={examKey} onSelect={setExamKey} />
-
-          <div className="space-y-3">
-            <button
-              onClick={() => setMode("practice")}
-              className="w-full py-5 bg-cyan-500 text-black font-black rounded-2xl text-lg uppercase hover:bg-white transition-all"
-            >
-              Start Practice
-            </button>
-            <button
-              onClick={() => setMode("upcat")}
-              className="w-full py-4 bg-violet-500/10 border border-violet-500/30 text-violet-400 font-black rounded-2xl text-sm uppercase hover:bg-violet-500/20 transition-all"
-            >
-              UPCAT Full Mock Exam
-            </button>
-            <button
-              onClick={async () => {
-                const weak = await getWeakSubjectsFromDB();
-                if (!weak || weak.length === 0) {
-                  alert("Complete a few practice cycles first so Alamat can identify your weak topics.");
-                  return;
-                }
-                setWeakSubjects(weak);
-                setMode("drill");
-              }}
-              className="w-full py-4 bg-amber-500/10 border border-amber-500/30 text-amber-400 font-black rounded-2xl text-sm uppercase hover:bg-amber-500/20 transition-all"
-            >
-              Weak Topic Drill
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  if (mode === "studyplan") {
+    return <StudyPlan examKey={examKey} onBack={() => setMode("select")} />;
   }
 
   // mode === "practice"
@@ -587,6 +576,7 @@ export default function App() {
         setReviewHistory(history);
         setMode("review");
       }}
+      onBack={() => setMode("select")}
     />
   );
 }
