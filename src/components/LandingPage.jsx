@@ -68,6 +68,7 @@ const MODE_CARDS = [
 export default function LandingPage({ examKey, setExamKey, onPractice, onUPCAT, onDrill, onStudyPlan }) {
   const [stats, setStats] = useState({ total: 0, correct: 0, streak: 0, subjects: 0 });
   const [hasProgress, setHasProgress] = useState(false);
+  const [loadingKey, setLoadingKey] = useState(null);
 
   useEffect(() => {
     async function loadStats() {
@@ -84,11 +85,13 @@ export default function LandingPage({ examKey, setExamKey, onPractice, onUPCAT, 
 
   const accuracy = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : null;
 
-  function handleMode(key) {
+  async function handleMode(key) {
+    setLoadingKey(key);
     if (key === "practice") onPractice();
     else if (key === "upcat") onUPCAT();
-    else if (key === "drill") onDrill();
+    else if (key === "drill") await onDrill();
     else if (key === "studyplan") onStudyPlan();
+    setLoadingKey(null);
   }
 
   const selectedExam = EXAMS.find((e) => e.key === examKey);
@@ -173,24 +176,30 @@ export default function LandingPage({ examKey, setExamKey, onPractice, onUPCAT, 
         <div className="space-y-4">
           <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500">Choose Mode</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {MODE_CARDS.map((card) => (
-              <button
-                key={card.key}
-                onClick={() => handleMode(card.key)}
-                className={`group p-6 rounded-3xl border bg-gradient-to-br ${card.color} text-left transition-all duration-200 hover:scale-[1.01]`}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${card.iconBg}`}>
-                    {card.icon}
+            {MODE_CARDS.map((card) => {
+              const isLoading = loadingKey === card.key;
+              return (
+                <button
+                  key={card.key}
+                  onClick={() => handleMode(card.key)}
+                  disabled={!!loadingKey}
+                  className={`group p-6 rounded-3xl border bg-linear-to-br ${card.color} text-left transition-all duration-200 hover:scale-[1.01] disabled:opacity-60 disabled:cursor-wait`}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${card.iconBg}`}>
+                      {isLoading
+                        ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        : card.icon}
+                    </div>
+                    <span className={`text-[10px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all ${card.labelColor}`}>
+                      {isLoading ? "Loading..." : `${card.cta} →`}
+                    </span>
                   </div>
-                  <span className={`text-[10px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all ${card.labelColor}`}>
-                    {card.cta} →
-                  </span>
-                </div>
-                <p className={`text-sm font-black uppercase tracking-wider mb-1 ${card.labelColor}`}>{card.label}</p>
-                <p className="text-slate-500 text-xs leading-relaxed">{card.description}</p>
-              </button>
-            ))}
+                  <p className={`text-sm font-black uppercase tracking-wider mb-1 ${card.labelColor}`}>{card.label}</p>
+                  <p className="text-slate-500 text-xs leading-relaxed">{card.description}</p>
+                </button>
+              );
+            })}
           </div>
         </div>
 

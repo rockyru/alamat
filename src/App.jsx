@@ -23,7 +23,7 @@ const SUBJECT_THEMES = {
   "Civil Service - Analytical": "border-pink-500/40 text-pink-400 bg-pink-500/10",
 };
 
-function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver, onBack }) {
+function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver, onBack, onNewCycle }) {
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [selected, setSelected] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -38,6 +38,7 @@ function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver, onBack }) {
   const [isHardMode, setIsHardMode] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [sessionHistory, setSessionHistory] = useState([]);
+  const sessionHistoryRef = useRef([]);
 
   const timerRef = useRef(null);
   const SESSION_LIMIT = 10;
@@ -63,10 +64,15 @@ function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver, onBack }) {
       let startAtCount = 0;
       if (saved) {
         const parsed = JSON.parse(saved);
-        setScore(parsed.score || { correct: 0, total: 0 });
-        setSessionCount(parsed.sessionCount || 0);
-        setIsHardMode(parsed.isHardMode || false);
-        startAtCount = parsed.sessionCount || 0;
+        const savedCount = parsed.sessionCount || 0;
+        if (savedCount < SESSION_LIMIT) {
+          setScore(parsed.score || { correct: 0, total: 0 });
+          setSessionCount(savedCount);
+          setIsHardMode(parsed.isHardMode || false);
+          startAtCount = savedCount;
+        } else {
+          localStorage.removeItem("alamat_session_data");
+        }
       }
       const count = await db.questions.count();
       const seedSubject = examSubjects?.[0] ?? "Mathematics";
@@ -90,7 +96,7 @@ function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver, onBack }) {
       setIsSessionOver(true);
       setIsLoading(false);
       setIsTransitioning(false);
-      onSessionOver?.(sessionHistory);
+      onSessionOver?.(sessionHistoryRef.current);
       return;
     }
 
@@ -140,7 +146,9 @@ function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver, onBack }) {
     const newCount = sessionCount + 1;
     setScore((prev) => ({ correct: isCorrect ? prev.correct + 1 : prev.correct, total: prev.total + 1 }));
     setSessionCount(newCount);
-    setSessionHistory((prev) => [...prev, { ...currentQuestion, selectedIndex: index, isCorrect }]);
+    const entry = { ...currentQuestion, selectedIndex: index, isCorrect };
+    sessionHistoryRef.current = [...sessionHistoryRef.current, entry];
+    setSessionHistory(sessionHistoryRef.current);
     await updateProgress(currentQuestion.topic, isCorrect, currentQuestion.subject);
     // Schedule wrong answers for spaced repetition
     if (!isCorrect) {
@@ -309,12 +317,14 @@ function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver, onBack }) {
               </div>
             </div>
             <button
-              onClick={async () => {
+              onClick={async (e) => {
+                e.currentTarget.disabled = true;
+                e.currentTarget.innerHTML = '<div class="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto"></div>';
                 localStorage.removeItem("alamat_session_data");
                 await db.questions.clear();
-                window.location.reload();
+                onNewCycle?.();
               }}
-              className="w-full bg-cyan-500 text-black py-8 rounded-[40px] font-black text-2xl uppercase hover:bg-white transition-all shadow-2xl"
+              className="w-full bg-cyan-500 text-black py-8 rounded-[40px] font-black text-2xl uppercase hover:bg-white transition-all shadow-2xl flex items-center justify-center"
             >
               New Cycle
             </button>
@@ -501,6 +511,7 @@ export default function App() {
   const [examKey, setExamKey] = useState("upcat");
   const [reviewHistory, setReviewHistory] = useState([]);
   const [weakSubjects, setWeakSubjects] = useState([]);
+  const [practiceKey, setPracticeKey] = useState(0);
 
   async function getWeakSubjectsFromDB() {
     const progress = await db.progress.toArray();
@@ -534,8 +545,11 @@ export default function App() {
       <ReviewMode
         history={reviewHistory}
         onDone={async () => {
+          setReviewHistory([]);
           await db.questions.clear();
-          setMode("select");
+          localStorage.removeItem("alamat_session_data");
+          setPracticeKey((k) => k + 1);
+          setMode("practice");
         }}
       />
     );
@@ -570,6 +584,7 @@ export default function App() {
   const exam = EXAMS.find((e) => e.key === examKey);
   return (
     <PracticeApp
+      key={practiceKey}
       examSubjects={exam?.subjects}
       onEnterUPCAT={() => setMode("upcat")}
       onSessionOver={(history) => {
@@ -577,6 +592,7 @@ export default function App() {
         setMode("review");
       }}
       onBack={() => setMode("select")}
+      onNewCycle={() => setPracticeKey((k) => k + 1)}
     />
   );
 }
