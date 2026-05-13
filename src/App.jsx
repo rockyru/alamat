@@ -507,11 +507,12 @@ function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver, onBack, onNewC
 }
 
 export default function App() {
-  const [mode, setMode] = useState("select"); // "select" | "practice" | "upcat" | "review" | "drill"
+  const [mode, setMode] = useState("select"); // "select" | "practice" | "upcat" | "review" | "drill" | "studyplan" | "studyplan-practice"
   const [examKey, setExamKey] = useState("upcat");
   const [reviewHistory, setReviewHistory] = useState([]);
   const [weakSubjects, setWeakSubjects] = useState([]);
   const [practiceKey, setPracticeKey] = useState(0);
+  const [studyPlanSession, setStudyPlanSession] = useState(null); // { subject, dayKey }
 
   async function getWeakSubjectsFromDB() {
     const progress = await db.progress.toArray();
@@ -541,15 +542,25 @@ export default function App() {
   }
 
   if (mode === "review") {
+    const afterReview = studyPlanSession ? "studyplan" : "practice";
     return (
       <ReviewMode
         history={reviewHistory}
         onDone={async () => {
+          if (studyPlanSession) {
+            // Mark this plan day as complete
+            const done = JSON.parse(localStorage.getItem("alamat_plan_done") || "[]");
+            if (!done.includes(studyPlanSession.dayKey)) {
+              done.push(studyPlanSession.dayKey);
+              localStorage.setItem("alamat_plan_done", JSON.stringify(done));
+            }
+            setStudyPlanSession(null);
+          }
           setReviewHistory([]);
           await db.questions.clear();
           localStorage.removeItem("alamat_session_data");
           setPracticeKey((k) => k + 1);
-          setMode("practice");
+          setMode(afterReview);
         }}
       />
     );
@@ -577,21 +588,41 @@ export default function App() {
   }
 
   if (mode === "studyplan") {
-    return <StudyPlan examKey={examKey} onBack={() => setMode("select")} />;
+    return (
+      <StudyPlan
+        examKey={examKey}
+        onBack={() => setMode("select")}
+        onStudyNow={(subject, dayKey) => {
+          setStudyPlanSession({ subject, dayKey });
+          setPracticeKey((k) => k + 1);
+          setMode("studyplan-practice");
+        }}
+      />
+    );
   }
 
-  // mode === "practice"
+  // mode === "practice" or "studyplan-practice"
   const exam = EXAMS.find((e) => e.key === examKey);
+  const practiceSubjects = studyPlanSession
+    ? [studyPlanSession.subject]
+    : exam?.subjects;
   return (
     <PracticeApp
       key={practiceKey}
-      examSubjects={exam?.subjects}
+      examSubjects={practiceSubjects}
       onEnterUPCAT={() => setMode("upcat")}
       onSessionOver={(history) => {
         setReviewHistory(history);
         setMode("review");
       }}
-      onBack={() => setMode("select")}
+      onBack={() => {
+        if (studyPlanSession) {
+          setStudyPlanSession(null);
+          setMode("studyplan");
+        } else {
+          setMode("select");
+        }
+      }}
       onNewCycle={() => setPracticeKey((k) => k + 1)}
     />
   );

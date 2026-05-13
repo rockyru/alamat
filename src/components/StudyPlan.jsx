@@ -61,9 +61,12 @@ function generatePlan(weakSubjects, allSubjects, examDate, hoursPerDay) {
     date.setDate(today.getDate() + i);
     const subject = queue[i % queue.length];
     const isWeak = weakSubjects.includes(subject);
+    const dateStr = date.toISOString().split("T")[0];
     schedule.push({
       day: i + 1,
       date: date.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" }),
+      dateStr,
+      dayKey: `${dateStr}-${subject}`,
       subject,
       hours: isWeak ? Math.min(hoursPerDay, SUBJECT_HOURS[subject] || 2) : Math.max(1, hoursPerDay - 1),
       isWeak,
@@ -74,13 +77,16 @@ function generatePlan(weakSubjects, allSubjects, examDate, hoursPerDay) {
   return { schedule, allocation, daysLeft, totalHours };
 }
 
-export default function StudyPlan({ examKey, onBack }) {
+export default function StudyPlan({ examKey, onBack, onStudyNow }) {
   const [examDate, setExamDate] = useState("");
   const [hoursPerDay, setHoursPerDay] = useState(2);
   const [plan, setPlan] = useState(null);
   const [weakSubjects, setWeakSubjects] = useState([]);
   const [allSubjects, setAllSubjects] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [doneDays, setDoneDays] = useState(() =>
+    JSON.parse(localStorage.getItem("alamat_plan_done") || "[]")
+  );
 
   useEffect(() => {
     async function loadProgress() {
@@ -99,6 +105,13 @@ export default function StudyPlan({ examKey, onBack }) {
     }
     loadProgress();
   }, []);
+
+  // Refresh done-days when plan is visible (user may have just returned from a session)
+  useEffect(() => {
+    if (plan) {
+      setDoneDays(JSON.parse(localStorage.getItem("alamat_plan_done") || "[]"));
+    }
+  }, [plan]);
 
   function handleGenerate() {
     if (!examDate) return;
@@ -215,31 +228,61 @@ export default function StudyPlan({ examKey, onBack }) {
         <div className="space-y-3">
           <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Day-by-Day Schedule</p>
           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-            {plan.schedule.map((day) => (
-              <div
-                key={day.day}
-                className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${
-                  day.isWeak
-                    ? "bg-amber-500/5 border-amber-500/20"
-                    : "bg-white/[0.02] border-white/5"
-                }`}
-              >
-                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
-                  <span className="text-[10px] font-black text-slate-500">{day.day}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-black text-white truncate">{day.subject}</p>
-                    {day.isWeak && <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest shrink-0">Weak</span>}
+            {plan.schedule.map((day) => {
+              const isDone = doneDays.includes(day.dayKey);
+              const today = new Date().toISOString().split("T")[0];
+              const isPast = day.dateStr <= today;
+              const isToday = day.dateStr === today;
+              return (
+                <div
+                  key={day.day}
+                  className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${
+                    isDone
+                      ? "bg-emerald-500/5 border-emerald-500/20 opacity-60"
+                      : isToday
+                      ? "bg-cyan-500/5 border-cyan-500/30"
+                      : day.isWeak
+                      ? "bg-amber-500/5 border-amber-500/20"
+                      : "bg-white/[0.02] border-white/5"
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isDone ? "bg-emerald-500/20" : "bg-white/5"}`}>
+                    {isDone ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    ) : (
+                      <span className="text-[10px] font-black text-slate-500">{day.day}</span>
+                    )}
                   </div>
-                  <p className="text-[10px] text-slate-500">{day.focus}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className={`text-sm font-black truncate ${isDone ? "text-emerald-400 line-through" : "text-white"}`}>{day.subject}</p>
+                      {isToday && !isDone && <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest shrink-0">Today</span>}
+                      {day.isWeak && !isDone && <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest shrink-0">Weak</span>}
+                      {isDone && <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest shrink-0">Done</span>}
+                    </div>
+                    <p className="text-[10px] text-slate-500">{day.focus}</p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-right">
+                      <p className="text-sm font-black text-white">{day.hours}h</p>
+                      <p className="text-[10px] text-slate-600">{day.date}</p>
+                    </div>
+                    {!isDone && isPast && (
+                      <button
+                        onClick={() => onStudyNow(day.subject, day.dayKey)}
+                        className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                          isToday
+                            ? "bg-cyan-500 text-black hover:bg-white"
+                            : "bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/40"
+                        }`}
+                      >
+                        {isToday ? "Study Now" : "Catch Up"}
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-black text-white">{day.hours}h</p>
-                  <p className="text-[10px] text-slate-600">{day.date}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
