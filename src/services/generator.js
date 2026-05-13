@@ -7,13 +7,19 @@ export async function seedAlamatDatabase(subject, count, isHardMode = false) {
     ? `LEVEL: DIFFICULT. Generate genuinely hard questions that require multi-step reasoning, deep analysis, and synthesis of concepts. Questions should NOT be answerable by recognition alone — they must require working through the problem. Use complex scenarios, tricky edge cases, and plausible-but-wrong distractors that require careful reasoning to eliminate. Avoid straightforward definitional or recall questions.`
     : "LEVEL: STANDARD. Focus on core concepts and speed-accuracy.";
 
+  const examContext = subject.startsWith("Civil Service")
+    ? "Philippine Civil Service Examination (CSE) — Professional or Sub-Professional level."
+    : "Philippine college entrance exams: UPCAT, ACET, DCAT, USTET, or equivalent.";
+
   const prompt = `Generate ${count} UNIQUE exam questions for ${subject}.
+Context: ${examContext}
 ${difficultyContext}
 
 Rules for "visualPrompt":
-1. If Math/Science: Attempt a 5-line ASCII diagram using |, _, /, \, *.
-2. If Reading/Language: Provide a "Context Snippet" or a "Scenario Description".
-3. NEVER return meta-descriptions like "A diagram of...". Instead, show the data or the drawing.
+1. If Math/Science/Analytical: Attempt a 5-line ASCII diagram using |, _, /, \, *.
+2. If Reading/Language/Filipino: Provide a short "Context Snippet" or "Scenario Description" in the appropriate language.
+3. If Abstract Reasoning: Describe a pattern or sequence that the student must continue or identify.
+4. NEVER return meta-descriptions like "A diagram of...". Instead, show the data or the drawing.
 
 Return ONLY JSON:
 {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { updateProgress } from "./adaptiveEngine";
 import { seedAlamatDatabase } from "./services/generator";
 import { db } from "./db";
+import UPCATMock from "./components/UPCATMock";
 
 // Map colors to subjects for better visual hierarchy
 const SUBJECT_THEMES = {
@@ -10,9 +11,14 @@ const SUBJECT_THEMES = {
   "Language Proficiency": "border-purple-500/40 text-purple-400 bg-purple-500/10",
   "Reading Comprehension": "border-amber-500/40 text-amber-400 bg-amber-500/10",
   "General Knowledge": "border-cyan-500/40 text-cyan-400 bg-cyan-500/10",
+  "Filipino": "border-rose-500/40 text-rose-400 bg-rose-500/10",
+  "Abstract Reasoning": "border-violet-500/40 text-violet-400 bg-violet-500/10",
+  "Civil Service - Verbal": "border-orange-500/40 text-orange-400 bg-orange-500/10",
+  "Civil Service - Numerical": "border-teal-500/40 text-teal-400 bg-teal-500/10",
+  "Civil Service - Analytical": "border-pink-500/40 text-pink-400 bg-pink-500/10",
 };
 
-export default function App() {
+function PracticeApp({ onEnterUPCAT }) {
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [selected, setSelected] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -31,11 +37,18 @@ export default function App() {
   const SESSION_LIMIT = 10;
 
   const SUBJECT_TIMERS = {
+    // UPCAT / College Entrance
     Mathematics: 90,
     Science: 60,
     "Reading Comprehension": 80,
     "Language Proficiency": 45,
+    "Filipino": 45,
+    "Abstract Reasoning": 60,
     "General Knowledge": 30,
+    // Civil Service Exam
+    "Civil Service - Verbal": 50,
+    "Civil Service - Numerical": 70,
+    "Civil Service - Analytical": 60,
   };
 
   useEffect(() => {
@@ -127,6 +140,12 @@ export default function App() {
         Science: { correct: 0, total: 0, color: "text-emerald-400" },
         "Language Proficiency": { correct: 0, total: 0, color: "text-purple-400" },
         "Reading Comprehension": { correct: 0, total: 0, color: "text-amber-400" },
+        Filipino: { correct: 0, total: 0, color: "text-rose-400" },
+        "Abstract Reasoning": { correct: 0, total: 0, color: "text-violet-400" },
+        "General Knowledge": { correct: 0, total: 0, color: "text-cyan-400" },
+        "Civil Service - Verbal": { correct: 0, total: 0, color: "text-orange-400" },
+        "Civil Service - Numerical": { correct: 0, total: 0, color: "text-teal-400" },
+        "Civil Service - Analytical": { correct: 0, total: 0, color: "text-pink-400" },
       };
       progress.forEach((p) => {
         if (stats[p.subject]) {
@@ -199,6 +218,12 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
+            <button
+              onClick={onEnterUPCAT}
+              className="px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase transition-all bg-violet-500/20 border-violet-500/50 text-violet-400 hover:bg-violet-500/30"
+            >
+              UPCAT Mock
+            </button>
             <button
               onClick={async () => {
                 const next = !isHardMode;
@@ -403,4 +428,21 @@ export default function App() {
       )}
     </div>
   );
+}
+
+export default function App() {
+  const [mode, setMode] = useState("practice");
+
+  if (mode === "upcat") {
+    return (
+      <UPCATMock
+        onExit={async () => {
+          await db.questions.clear();
+          setMode("practice");
+        }}
+      />
+    );
+  }
+
+  return <PracticeApp onEnterUPCAT={() => setMode("upcat")} />;
 }
