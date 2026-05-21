@@ -277,6 +277,24 @@ function PracticeApp({ onEnterUPCAT, examSubjects, onSessionOver, onBack, onNewC
               </svg>
             </button>
 
+            {/* Regenerate Questions */}
+            <button
+              onClick={async () => {
+                if (!window.confirm("Regenerate questions? This clears all current questions and creates a fresh set.")) return;
+                setIsLoading(true);
+                await db.questions.clear();
+                const subjects = Object.keys(SUBJECT_TIMERS);
+                await seedAlamatDatabase(subjects[Math.floor(Math.random() * subjects.length)], 5, isHardMode);
+                loadNextQuestion(sessionCount);
+              }}
+              title="Regenerate Questions — clears current set and creates a fresh one"
+              className="w-9 h-9 rounded-xl flex items-center justify-center border transition-all bg-white/5 border-white/10 text-amber-400 hover:bg-white/10"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+              </svg>
+            </button>
+
             {/* Vault */}
             <button
               onClick={toggleMastery}
